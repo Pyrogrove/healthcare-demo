@@ -26,7 +26,7 @@ Stop with `Ctrl+C`; restart with the same Streamlit command. The app defaults to
 
 ## Deployment status
 
-The canonical source repository is [Pyrogrove/healthcare-demo](https://github.com/Pyrogrove/healthcare-demo). There is not yet a hosted deployment. A public Streamlit runtime requires a separate Streamlit Community Cloud deployment connected to the repository. `app.py` is the intended entrypoint and `requirements.txt` is at the repository root; cloud compatibility and the final `streamlit.app` URL remain unverified until deployment completes.
+The canonical source repository is [Pyrogrove/healthcare-demo](https://github.com/Pyrogrove/healthcare-demo). The verified public demonstration is hosted on [Streamlit Community Cloud](https://pyrogrove-healthcare-demo.streamlit.app/), using `main` and `app.py` with dependencies from the root `requirements.txt`.
 
 The local `GE material/` directory contains interview research artifacts and is explicitly excluded from version control and publication.
 
@@ -39,7 +39,7 @@ The local `GE material/` directory contains interview research artifacts and is 
 
 ## Verification
 
-On 2026-08-19, 11 tests passed, Python compilation completed, installed-package consistency passed, the exact Streamlit command started the application, and the local HTTP/browser workflow was checked. No lint or static type-check configuration exists, so those checks are unverified rather than claimed. See `PROJECT.md` for retained evidence.
+On 2026-08-19, 11 tests passed, Python compilation completed, installed-package consistency passed, the exact Streamlit command started the application, and both local and deployed browser workflows were checked across all four tabs with no console errors. No lint or static type-check configuration exists, so those checks are unverified rather than claimed. See `PROJECT.md` for retained evidence.
 
 ## Data and privacy boundary
 
