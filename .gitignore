@@ -1,0 +1,21 @@
+.env
+.env.*
+*.pem
+*.key
+secrets.*
+.streamlit/secrets.toml
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+pytest-cache-files-*/
+.streamlit/cache/
+*.log
+tmp/
+# Interview research artifacts; never publish or commit.
+GE material/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
