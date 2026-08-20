@@ -325,6 +325,64 @@ def regression_summary(curated: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
                    "r_squared": round(r_squared, 3)}
 
 
+def regression_holdout_evaluation(curated: pd.DataFrame, train_fraction: float = 0.7) -> tuple[pd.DataFrame, dict]:
+    """Evaluate the simple OLS model on a time-ordered holdout.
+
+    Scaling parameters and coefficients are learned from the earlier training
+    encounters only. The comparison baseline predicts the training-set mean.
+    This demonstrates model-evaluation workflow, not production performance.
+    """
+    if not 0.5 <= train_fraction < 1:
+        raise ValueError("train_fraction must be between 0.5 inclusive and 1 exclusive")
+    sample = curated[curated["bed_status"].eq("occupied")].copy()
+    sample["acuity_score"] = sample["patient_acuity"].map({"low": 1, "moderate": 2, "high": 3})
+    sample = sample.sort_values(["admission_time", "encounter_id"]).reset_index(drop=True)
+    predictors = ["occupancy", "admission_volume_24h", "acuity_score"]
+    split = int(np.floor(len(sample) * train_fraction))
+    train = sample.iloc[:split]
+    test = sample.iloc[split:]
+    train_x = train[predictors].astype(float).to_numpy()
+    test_x = test[predictors].astype(float).to_numpy()
+    means = train_x.mean(axis=0)
+    scales = train_x.std(axis=0)
+    scales[scales == 0] = 1
+    train_design = np.column_stack([np.ones(len(train)), (train_x - means) / scales])
+    test_design = np.column_stack([np.ones(len(test)), (test_x - means) / scales])
+    train_y = train["boarding_hours"].astype(float).to_numpy()
+    test_y = test["boarding_hours"].astype(float).to_numpy()
+    coefficients, *_ = np.linalg.lstsq(train_design, train_y, rcond=None)
+    predictions = test_design @ coefficients
+    baseline_predictions = np.full(len(test_y), train_y.mean())
+    model_mae = float(np.mean(np.abs(test_y - predictions)))
+    baseline_mae = float(np.mean(np.abs(test_y - baseline_predictions)))
+    denominator = float(np.sum((test_y - test_y.mean()) ** 2))
+    test_r_squared = 1 - float(np.sum((test_y - predictions) ** 2)) / denominator if denominator else 0.0
+    predictions_table = test[["encounter_id", "admission_time", "boarding_hours"]].copy()
+    predictions_table["predicted_boarding_hours"] = np.round(predictions, 2)
+    predictions_table["absolute_error_hours"] = np.round(np.abs(test_y - predictions), 2)
+    metrics = {
+        "training_rows": int(len(train)),
+        "test_rows": int(len(test)),
+        "model_mae": round(model_mae, 2),
+        "baseline_mae": round(baseline_mae, 2),
+        "test_r_squared": round(test_r_squared, 3),
+        "beats_baseline": bool(model_mae < baseline_mae),
+        "split_rule": "Earlier 70% train / latest 30% test",
+    }
+    return predictions_table, metrics
+
+
+def regression_ready_dataset(curated: pd.DataFrame) -> pd.DataFrame:
+    """Return the transparent current-encounter dataset used by regression examples."""
+    sample = curated[curated["bed_status"].eq("occupied")].copy()
+    sample["acuity_score"] = sample["patient_acuity"].map({"low": 1, "moderate": 2, "high": 3})
+    columns = [
+        "patient_id", "encounter_id", "unit", "admission_time", "bed_status",
+        "boarding_hours", "occupancy", "admission_volume_24h", "patient_acuity", "acuity_score",
+    ]
+    return sample[columns].sort_values(["admission_time", "encounter_id"]).reset_index(drop=True)
+
+
 def boarding_hypothesis_test(curated: pd.DataFrame, permutations: int = 2000) -> dict:
     """Deterministic two-sided permutation test for high versus lower occupancy."""
     sample = curated[curated["bed_status"].eq("occupied")].copy()

@@ -3,8 +3,8 @@ project_name: Hospital Flow Decision Lab
 repository: https://github.com/Pyrogrove/healthcare-demo
 project_type: Streamlit interview demonstration
 lifecycle: candidate-retained-milestone
-stack: Python 3.14, Streamlit, pandas, NumPy, Plotly, SQLite, pytest
-tags: synthetic-healthcare, hospital-flow, ETL, SQL, forecasting, simulation
+stack: Python 3.14, Streamlit, pandas, NumPy, Plotly, SQLite, pytest, base-R companion
+tags: synthetic-healthcare, hospital-flow, ETL, SQL, forecasting, regression, R
 deployment: streamlit-community-cloud
 deployment_url: https://pyrogrove-healthcare-demo.streamlit.app/
 last_verified: 2026-08-20
@@ -14,19 +14,19 @@ last_verified: 2026-08-20
 Demonstrate a problem-back analytics consulting pathway from trusted data to an owned intervention and measurable operational outcome.
 
 # Current State
-The enhanced six-section milestone is locally runnable, committed to GitHub `main`, and connected to the public Streamlit Community Cloud URL. The public endpoint returned HTTP 200 after deployment; direct browser confirmation of the rendered six-section revision remains unverified.
+The R-companion six-section revision is locally runnable and verified. Its commit, push, and Streamlit rebuild are authorized but not yet completed at this documentation point; the public URL remains connected to GitHub `main`.
 
 # Demonstrated Capabilities
-Deterministic event generation; controlled defect detection and quarantine; raw-to-curated ETL; simplified ADT-like and FHIR-style mappings; visible SQLite analysis; occupancy reconciliation; bottleneck analysis; transparent census forecasting; exploratory OLS and permutation testing; deterministic capacity what-if arithmetic; and tiered accountable actions.
+Deterministic event generation; controlled defect detection and quarantine; raw-to-curated ETL; full and regression-ready downloads; simplified ADT-like and FHIR-style mappings; visible SQLite analysis; occupancy reconciliation; bottleneck analysis; transparent census forecasting; exploratory OLS, time-ordered holdout and permutation testing; educational base-R workflow translation; deterministic capacity arithmetic; and tiered accountable actions.
 
 # Verification
-On 2026-08-20: 17 tests passed; Python compilation and installed-package consistency passed; the exact README run command started the app; Streamlit's app test runner rendered all six sections, two sliders, and the SQL selector without an application exception. The intended eight-file change set passed diff, credential-pattern, ignored-secret-file, generated-junk, and file-size checks; no repository secret scanner is configured. Commit `2b90e16` was pushed to GitHub `main`, the remote head matched, and the public Streamlit endpoint returned HTTP 200. Direct browser confirmation of the deployed six-section revision is UNVERIFIED because browser control was unavailable. Lint and static type checking remain UNVERIFIED because no tools are configured. Headline reconciliation remains 234 reported - 216 reconciled = 18 phantom beds across 5,000 events and 240 fictional beds.
+On 2026-08-20: 20 tests passed, including deterministic holdout evaluation, export schemas, and base-R script structure. Python compilation, installed-package consistency, and Streamlit app rendering passed. The executed Python model uses 151 earlier training encounters and 65 later test encounters; its 1.97-hour MAE does not beat the 1.96-hour mean baseline and test R² is -0.024. R execution is UNVERIFIED because no R runtime is installed. Deployment of this revision is pending the authorized push. Lint and static type checking remain UNVERIFIED because no tools are configured.
 
 # Known Limitations
-No live data, conformant standards messages or server, trained production prediction, validated simulation, causal inference, clinical validation, uncertainty intervals, production security model, or persistent storage.
+No live data, conformant standards server, executed R environment, validated prediction, validated simulation, causal inference, clinical validation, uncertainty intervals, production security model, or persistent storage. The regression fails its simple holdout-baseline comparison.
 
 # Next Action
-Use the public URL for a final human visual walkthrough of the five-minute path. Preserve the synthetic boundary and never commit or publish `GE material/`.
+Complete the authorized commit, push, Streamlit rebuild, and public verification. Preserve the synthetic boundary and never commit or publish `GE material/`.
 
 # Tool-native Instructions
 Run `python -m pytest -q tests -p no:cacheprovider`, then `python -m streamlit run app.py`. Treat `GE material/` and `tmp/` as local-only artifacts.

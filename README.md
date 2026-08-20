@@ -12,13 +12,15 @@ It is not a GE HealthCare product, Command Center replica, clinical tool, hospit
 - raw → validation → transformation → curated encounter ETL with visible defect handling
 - simplified synthetic ADT-like and FHIR-style REST/JSON mappings
 - four visible SQLite queries over the curated analytic table
+- downloadable full curated and regression-ready synthetic datasets
 - unit pressure and bottleneck analysis
-- a transparent Holt census baseline, small OLS association example, and exploratory permutation test
+- a transparent Holt census baseline, small OLS association example, time-ordered holdout evaluation, and exploratory permutation test
+- a downloadable base-R translation of the regression workflow, explicitly not executed by the hosted app
 - deterministic what-if capacity arithmetic and an action queue with owners and deadlines
 
 ## Architecture and setup
 
-Python + Streamlit UI, pandas/NumPy pipeline, Plotly charts, standard-library SQLite, and pytest tests. SQLite is in-memory for demonstration; there is no external API, persistent database, authentication, or production integration.
+Python + Streamlit UI, pandas/NumPy pipeline, Plotly charts, standard-library SQLite, pytest tests, and an educational base-R companion script. SQLite is in-memory and R is not executed by the hosted application; there is no external API, persistent database, authentication, or production integration.
 
 ```powershell
 python -m pip install -r requirements.txt
@@ -29,22 +31,22 @@ Stop with `Ctrl+C`; restart with the same Streamlit command. The app defaults to
 
 ## Deployment status
 
-The canonical source repository is [Pyrogrove/healthcare-demo](https://github.com/Pyrogrove/healthcare-demo). The enhanced milestone is committed on `main` and connected to the public [Streamlit Community Cloud demonstration](https://pyrogrove-healthcare-demo.streamlit.app/). After the push, the public endpoint returned HTTP 200; browser-level confirmation that all six enhanced sections are rendered remains unverified.
+The canonical source repository is [Pyrogrove/healthcare-demo](https://github.com/Pyrogrove/healthcare-demo), connected to the public [Streamlit Community Cloud demonstration](https://pyrogrove-healthcare-demo.streamlit.app/). The R-companion enhancement is locally verified and awaiting its authorized commit/push at the time of this documentation update.
 
 The local `GE material/` directory contains interview research artifacts and is explicitly excluded from version control and publication.
 
 ## Five-minute interview path
 
 1. **Current State:** lead with 234 reported occupied beds versus 216 reconciled, then distinguish data distortion from persistent boarding.
-2. **Data & ETL:** show raw → validate → transform → curate, one defect-handling example, one simplified integration mapping, and one SQL query.
-3. **Forecast & Statistics:** explain the transparent seven-day baseline, low-powered exploratory regression, and what the permutation-test p-value does not prove.
+2. **Data & ETL:** show raw → validate → transform → curate, clarify that the table is a 25-row preview, then show the full and regression-ready downloads.
+3. **Forecast & Statistics:** explain the seven-day baseline, exploratory regression, failed holdout comparison, permutation test, and equivalent base-R workflow.
 4. **What-if & Action:** change one assumption, interpret the result as deterministic arithmetic, and close on owner, deadline, success measure, and human decision.
 
 See `INTERVIEW_DEMO_GUIDE.md` for exact wording, likely questions, and production limitations.
 
 ## Verification
 
-On 2026-08-20, 17 tests passed, Python compilation completed, installed-package consistency passed, the exact Streamlit command started the application, and Streamlit's app test runner rendered all six tabs and interactive controls with no application exception. The intended change set passed credential, ignored-file, generated-junk, size, and diff checks before commit. GitHub `main` and the public Streamlit endpoint were reachable after push. Direct browser confirmation of the deployed six-section interface remains unverified because the browser-control connection was unavailable. No lint or static type-check configuration exists. See `PROJECT.md` for the state boundary.
+On 2026-08-20, 20 tests passed, including the full/regression dataset contracts, deterministic time-ordered holdout, and required base-R workflow tokens. Python compilation, installed-package consistency, Streamlit startup, and application rendering were also checked. R execution is unverified because neither the local nor hosted environment has an R runtime. Direct browser confirmation remains subject to the state recorded in `PROJECT.md`; no lint or static type-check configuration exists.
 
 ## Data and privacy boundary
 
@@ -52,7 +54,7 @@ All records are fixed-seed and fictional. No names, MRNs, addresses, diagnoses, 
 
 ## Known limitations
 
-Physical status is assumed trustworthy; the as-of time and planning rates are fixed; readiness is a non-clinical scenario flag. There is no production security, live integration, workflow write-back, trained prediction, validated simulation, or clinical validation.
+Physical status is assumed trustworthy; occupancy is a unit-level snapshot rather than historical occupancy at encounter time; the synthetic forecast history and planning rates are constructed; readiness is a non-clinical scenario flag. The regression fails to beat its mean baseline. There is no executed R environment, production security, live integration, workflow write-back, validated model, validated simulation, or clinical validation.
 
 ## Conceptual inputs
 

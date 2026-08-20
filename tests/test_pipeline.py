@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 
 from src.generate_synthetic_data import generate_events
@@ -12,6 +14,8 @@ from src.pipeline import (
     map_fhir_encounter,
     planning_scenario,
     reconcile,
+    regression_holdout_evaluation,
+    regression_ready_dataset,
     regression_summary,
     sql_examples,
     validate_events,
@@ -137,3 +141,31 @@ def test_capacity_what_if_is_deterministic_and_improvement_reduces_pressure():
     improved = capacity_what_if(generate_events(), projected_admissions=35, expected_discharges=20, discharge_timing_improvement=30)
     assert improved["scenario_occupied"] < baseline["scenario_occupied"]
     assert improved["scenario_pressure"] <= baseline["scenario_pressure"]
+
+
+def test_regression_ready_export_has_complete_reproducible_inputs():
+    curated, _ = build_curated_encounters(generate_events())
+    regression_data = regression_ready_dataset(curated)
+    assert len(regression_data) == 216
+    assert regression_data["encounter_id"].is_unique
+    assert {"boarding_hours", "occupancy", "admission_volume_24h", "acuity_score"}.issubset(regression_data.columns)
+    assert set(regression_data["acuity_score"]) == {1, 2, 3}
+
+
+def test_time_ordered_holdout_is_deterministic_and_compares_a_baseline():
+    curated, _ = build_curated_encounters(generate_events())
+    first_predictions, first_metrics = regression_holdout_evaluation(curated)
+    second_predictions, second_metrics = regression_holdout_evaluation(curated)
+    pd.testing.assert_frame_equal(first_predictions, second_predictions)
+    assert first_metrics == second_metrics
+    assert first_metrics["training_rows"] == 151
+    assert first_metrics["test_rows"] == 65
+    assert first_metrics["model_mae"] >= 0
+    assert first_metrics["baseline_mae"] >= 0
+
+
+def test_r_companion_is_base_r_and_contains_the_same_model_workflow():
+    script = (Path(__file__).parents[1] / "analysis" / "hospital_flow_regression.R").read_text(encoding="utf-8")
+    required_tokens = ["read.csv", "duplicated", "is.na", "lm(", "predict(", "model_mae", "baseline_mae"]
+    assert all(token in script for token in required_tokens)
+    assert "library(" not in script

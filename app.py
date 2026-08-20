@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
@@ -17,6 +18,8 @@ from src.pipeline import (
     map_adt_like,
     map_fhir_encounter,
     reconcile,
+    regression_holdout_evaluation,
+    regression_ready_dataset,
     regression_summary,
     sql_examples,
     unit_summary,
@@ -46,6 +49,9 @@ def load_data():
 
 
 events, latest, metrics, curated, audit, units, actions = load_data()
+regression_data = regression_ready_dataset(curated)
+r_script_path = Path(__file__).parent / "analysis" / "hospital_flow_regression.R"
+r_script_text = r_script_path.read_text(encoding="utf-8")
 
 st.markdown('<div class="eyebrow">Synthetic data → operational decision · interview demonstration</div>', unsafe_allow_html=True)
 st.title("Hospital Flow Decision Lab")
@@ -106,9 +112,36 @@ with tabs[1]:
         ["Unmapped unit", audit["unmapped_rows_quarantined"], "Quarantine until reference mapping is fixed"],
     ], columns=["Data issue", "Rows", "Treatment"])
     st.dataframe(handling, width="stretch", hide_index=True)
-    with st.expander("View curated analytic dataset"):
+    with st.expander("View curated analytic dataset preview"):
         shown = ["patient_id", "encounter_id", "unit", "admission_time", "decision_to_admit_time", "bed_request_time", "bed_assigned_time", "transfer_time", "expected_discharge_time", "actual_discharge_time", "bed_status", "staffed_beds", "occupancy", "patient_acuity"]
         st.dataframe(curated[shown].head(25), width="stretch", hide_index=True)
+        st.caption(f"Preview only: 25 of {len(curated):,} curated encounters and 14 selected fields.")
+    d1, d2 = st.columns(2)
+    d1.download_button(
+        "Download full curated dataset",
+        curated.to_csv(index=False, date_format="%Y-%m-%d %H:%M:%S").encode("utf-8"),
+        file_name="hospital_flow_curated.csv",
+        mime="text/csv",
+        help=f"All {len(curated):,} encounters and {len(curated.columns)} fields used across the demonstration.",
+        width="stretch",
+    )
+    d2.download_button(
+        "Download regression-ready dataset",
+        regression_data.to_csv(index=False, date_format="%Y-%m-%d %H:%M:%S").encode("utf-8"),
+        file_name="hospital_flow_regression_ready.csv",
+        mime="text/csv",
+        help=f"The {len(regression_data)} current occupied encounters and explicit predictors used by the regression examples.",
+        width="stretch",
+    )
+    with st.expander("Dataset grain and compact codebook"):
+        st.markdown(f"""
+- **Raw grain:** one source event; {audit['raw_rows']:,} rows before validation.
+- **Curated grain:** one encounter; {len(curated):,} rows after quarantine and transformation.
+- **Regression grain:** one currently occupied encounter; {len(regression_data)} rows.
+- **Outcome:** `boarding_hours` — synthetic boarding duration in hours.
+- **Predictors:** `occupancy` — current unit-level snapshot ratio; `admission_volume_24h` — recent valid admissions by unit; `acuity_score` — low=1, moderate=2, high=3.
+- **Important limitation:** the occupancy value is a snapshot, not historical occupancy reconstructed at each encounter timestamp.
+""")
 
     st.markdown("#### Simplified synthetic healthcare integration")
     i1, i2 = st.columns(2)
@@ -162,6 +195,14 @@ with tabs[3]:
         st.dataframe(regression, width="stretch", hide_index=True)
         st.write(f'Current encounters: **{regression_meta["sample_size"]}** · R²: **{regression_meta["r_squared"]:.3f}**')
         st.caption("Coefficients show association per one-standard-deviation increase, holding displayed variables constant. Low R² means little variation is explained; association is not causation.")
+        predictions, holdout = regression_holdout_evaluation(curated)
+        st.markdown("##### Time-ordered holdout check")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Test model MAE", f'{holdout["model_mae"]:.2f}h')
+        m2.metric("Mean baseline MAE", f'{holdout["baseline_mae"]:.2f}h')
+        m3.metric("Test R²", f'{holdout["test_r_squared"]:.3f}')
+        verdict = "The model beats the simple baseline." if holdout["beats_baseline"] else "The model does not beat the simple baseline."
+        st.caption(f'{holdout["split_rule"]}: {holdout["training_rows"]} train and {holdout["test_rows"]} test rows. {verdict} This is an honest stop/revise signal, not a model to operationalize.')
     test = boarding_hypothesis_test(curated)
     with r2:
         st.markdown("#### Exploratory permutation test")
@@ -173,6 +214,18 @@ with tabs[3]:
         conclusion = "The result is below 0.05 under this synthetic permutation test." if test["p_value"] < 0.05 else "The result is not below 0.05; no reliable group difference is established."
         st.caption(conclusion + " A p-value does not prove causation or measure operational importance.")
     st.info("Production forecasting requires temporal holdouts, baseline comparisons, error by horizon/unit, bias and drift monitoring, recalibration, and hospital-specific review.")
+    with st.expander("R companion: the same regression workflow in base R", expanded=True):
+        st.markdown("""
+**Purpose:** demonstrate fundamental R workflow literacy and portability of the analytic question.
+
+**Execution boundary:** the deployed Streamlit app executes the Python model. It displays and downloads this base-R companion, but does not execute R; no R runtime is installed in the hosting environment.
+
+Workflow: `read.csv()` → validate required fields → filter with `subset()` → create features → time-order the data → fit `lm()` → score with `predict()` → compare MAE with a mean baseline.
+""")
+        st.code(r_script_text, language="r")
+        st.download_button("Download base-R companion script", r_script_text.encode("utf-8"),
+                           file_name="hospital_flow_regression.R", mime="text/plain")
+        st.caption("Interview wording: Python is the implemented runtime; this script demonstrates an equivalent, reviewable R workflow—not professional R experience or a production model.")
 
 with tabs[4]:
     st.subheader("Deterministic What-if Scenario and Owned Action")

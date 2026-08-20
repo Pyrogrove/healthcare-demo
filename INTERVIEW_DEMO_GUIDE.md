@@ -5,9 +5,9 @@ This guide supports a synthetic interview demonstration for a Senior Analytics C
 ## Five-minute demonstration
 
 1. **0:00–0:45 — Frame the decision.** On **Current State**, show 234 reported occupied beds versus 216 reconciled. Say that trusted data creates decision room but does not remove the real flow constraint: 92 boarders over four hours.
-2. **0:45–1:45 — Establish the evidence chain.** On **Data & ETL**, walk through raw → validate → transform → curate. Point to missing acknowledgements, duplicates, invalid sequences, unmapped units, and late-arriving discharges. Explain quarantine versus retain-with-flag.
+2. **0:45–1:45 — Establish the evidence chain.** On **Data & ETL**, walk through raw → validate → transform → curate. Explain that the visible table is a 25-row preview, while the download contains all 1,500 curated encounters and the regression-ready download contains the 216 model rows.
 3. **1:45–2:25 — Show integration and SQL.** Open one FHIR-style REST/JSON mapping and the ADT-like mapping. State clearly that neither is a conformant server or full message. Select the occupancy SQL query and show that the result comes from the curated encounter table.
-4. **2:25–3:40 — Explain the analytics.** On **Forecast & Statistics**, describe the seven-day Holt baseline, the small OLS association example, and the permutation test. Emphasize transparent assumptions, low explanatory power, exploratory interpretation, and no causal claim.
+4. **2:25–3:40 — Explain the analytics.** On **Forecast & Statistics**, distinguish the Holt baseline, OLS association, time-ordered holdout, and permutation test. Say plainly that model MAE (1.97h) fails to beat the mean baseline (1.96h), so it should not be operationalized. Open the R companion and explain the equivalent workflow without claiming R execution or expertise.
 5. **3:40–5:00 — Move to action.** On **What-if & Action**, change projected admissions or discharge timing. Explain that forecast estimates a likely future while simulation asks what happens under chosen assumptions. End on the accountable queue: owner, next action, deadline, and success measure remain human-controlled.
 
 ## Technical areas
@@ -71,10 +71,18 @@ This guide supports a synthetic interview demonstration for a Senior Analytics C
 ### Regression and statistics
 
 1. **What the demo does:** estimates the association of unit occupancy, recent admission volume, and acuity with boarding hours for current encounters.
-2. **Technique:** ordinary least squares with standardized predictors and an intercept.
-3. **Why useful:** demonstrates multivariable association and honest interpretation of a low R-squared.
-4. **Limitations:** synthetic cross-sectional sample, omitted variables, clustered observations, and no causal design.
+2. **Technique:** ordinary least squares with standardized predictors and an intercept, plus an earlier-70% versus latest-30% holdout and mean-baseline comparison.
+3. **Why useful:** demonstrates multivariable association and the discipline to stop when a model does not improve a simple baseline.
+4. **Limitations:** synthetic cross-sectional sample, snapshot occupancy, omitted variables, clustered observations, failed holdout comparison, and no causal design.
 5. **Production requirement:** clinically and operationally justified features, diagnostics, uncertainty estimates, temporal validation, missing-data strategy, subgroup review, and causal methods if a causal question is asked.
+
+### R companion
+
+1. **What the demo does:** displays and downloads a base-R translation of the regression preparation, fitting, prediction, and baseline-comparison workflow.
+2. **Technique:** `read.csv()`, required-field checks, `duplicated()`, `is.na()`, `subset()`, a time-ordered split, `lm()`, `predict()`, MAE, and test R-squared.
+3. **Why useful:** shows that the analytic question and validation logic can be expressed in another statistical language.
+4. **Limitations:** the portal executes Python, not R; no R runtime is installed, so the companion is structurally reviewed and runtime-unverified.
+5. **Production requirement:** an approved R runtime, locked dependencies, automated execution tests, code review, governed deployment, and monitoring.
 
 ### Hypothesis testing
 
@@ -134,6 +142,14 @@ It does not give the probability that the hypothesis is true, prove causation, m
 
 Regression estimates how an outcome varies with one or more predictors while holding the other included predictors constant. It can support description, prediction, or carefully designed causal analysis, but this demo uses it only for exploratory association.
 
+### Why include R if Python already works?
+
+The job description permits Python, R, SAS, or similar software. Python is the implemented runtime. The R companion demonstrates fundamental syntax and workflow portability, not professional R experience. I would only claim executed R experience after running and testing it in an approved R environment.
+
+### Why did you not operationalize the regression?
+
+On the latest 30% holdout, model MAE is 1.97 hours versus 1.96 hours for predicting the training mean, and test R-squared is -0.024. It adds no demonstrated predictive value over the simple baseline, so the correct action is stop/revise rather than deployment.
+
 ### How would HL7 or FHIR data enter this pipeline?
 
 An interface receives and authenticates a message or API request, validates its structure and identifiers, records transport and event time, maps source fields and terminology to a canonical schema, and sends failures to a monitored exception path. The two adapters here show only the mapping concept.
@@ -161,6 +177,8 @@ Clinical readiness, patient placement, staffing trade-offs, escalation priority,
 ## What not to over-demonstrate
 
 - Do not spend time explaining the OLS matrix calculation unless asked; focus on interpretation and limitations.
+- Do not say the hosted application executes R. It displays a runtime-unverified educational translation.
+- Do not hide the failed holdout comparison; use it to demonstrate model-governance judgment.
 - Do not claim the p-value validates the operational hypothesis or proves high occupancy causes boarding.
 - Do not describe the adapters as a working HL7/FHIR integration.
 - Do not call the what-if arithmetic a digital twin or the census baseline a production model.
