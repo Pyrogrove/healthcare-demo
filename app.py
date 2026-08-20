@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 from pathlib import Path
 
@@ -9,21 +10,28 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.generate_synthetic_data import AS_OF, generate_events
-from src.pipeline import (
-    boarding_hypothesis_test,
-    build_actions,
-    build_curated_encounters,
-    capacity_what_if,
-    census_forecast,
-    map_adt_like,
-    map_fhir_encounter,
-    reconcile,
-    regression_holdout_evaluation,
-    regression_ready_dataset,
-    regression_summary,
-    sql_examples,
-    unit_summary,
+from src import pipeline as _pipeline
+
+# Streamlit Cloud may rerun app.py in an existing interpreter after a deploy.
+# If app.py and an already-imported pipeline module come from different
+# revisions, refresh the module once before binding the public functions.
+_PIPELINE_FUNCTIONS = (
+    "boarding_hypothesis_test", "build_actions", "build_curated_encounters",
+    "capacity_what_if", "census_forecast", "map_adt_like",
+    "map_fhir_encounter", "reconcile", "regression_holdout_evaluation",
+    "regression_ready_dataset", "regression_summary", "sql_examples",
+    "unit_summary",
 )
+if any(not hasattr(_pipeline, name) for name in _PIPELINE_FUNCTIONS):
+    importlib.invalidate_caches()
+    _pipeline = importlib.reload(_pipeline)
+
+(
+    boarding_hypothesis_test, build_actions, build_curated_encounters,
+    capacity_what_if, census_forecast, map_adt_like, map_fhir_encounter,
+    reconcile, regression_holdout_evaluation, regression_ready_dataset,
+    regression_summary, sql_examples, unit_summary,
+) = (getattr(_pipeline, name) for name in _PIPELINE_FUNCTIONS)
 
 st.set_page_config(page_title="Hospital Flow Decision Lab", page_icon="◆", layout="wide")
 st.markdown("""<style>

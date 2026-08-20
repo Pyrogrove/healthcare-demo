@@ -13,6 +13,7 @@ pytest-cache-files-*/
 .streamlit/cache/
 *.log
 tmp/
+outputs/
 # Interview research artifacts; never publish or commit.
 GE material/
 .idea/
