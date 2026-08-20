@@ -31,7 +31,7 @@ Stop with `Ctrl+C`; restart with the same Streamlit command. The app defaults to
 
 ## Deployment status
 
-The canonical source repository is [Pyrogrove/healthcare-demo](https://github.com/Pyrogrove/healthcare-demo), connected to the public [Streamlit Community Cloud demonstration](https://pyrogrove-healthcare-demo.streamlit.app/). The R-companion enhancement is locally verified and awaiting its authorized commit/push at the time of this documentation update.
+The canonical source repository is [Pyrogrove/healthcare-demo](https://github.com/Pyrogrove/healthcare-demo), connected to the public [Streamlit Community Cloud demonstration](https://pyrogrove-healthcare-demo.streamlit.app/). The R-companion enhancement was pushed in commit `c873051`; the public endpoint returned HTTP 200 after the automatic rebuild. Direct browser confirmation of the rendered revision remains unverified.
 
 The local `GE material/` directory contains interview research artifacts and is explicitly excluded from version control and publication.
 
