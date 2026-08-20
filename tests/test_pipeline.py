@@ -1,7 +1,21 @@
 import pandas as pd
 
 from src.generate_synthetic_data import generate_events
-from src.pipeline import bed_inventory, build_actions, planning_scenario, reconcile, validate_events
+from src.pipeline import (
+    bed_inventory,
+    boarding_hypothesis_test,
+    build_actions,
+    build_curated_encounters,
+    capacity_what_if,
+    census_forecast,
+    map_adt_like,
+    map_fhir_encounter,
+    planning_scenario,
+    reconcile,
+    regression_summary,
+    sql_examples,
+    validate_events,
+)
 
 
 def test_fixed_seed_is_reproducible():
@@ -63,3 +77,63 @@ def test_planning_scenario_is_transparent_and_action_case_improves():
     scenario = planning_scenario(generate_events(), 8)
     end = scenario[scenario["Hour"].eq(8)].set_index("Scenario")["Occupied beds"]
     assert end["Owned actions completed"] < end["Current practice"]
+
+
+def test_curated_etl_has_required_schema_and_auditable_handling():
+    curated, audit = build_curated_encounters(generate_events())
+    required = {
+        "patient_id", "encounter_id", "unit", "admission_time", "decision_to_admit_time",
+        "bed_request_time", "bed_assigned_time", "transfer_time", "expected_discharge_time",
+        "actual_discharge_time", "bed_status", "staffed_beds", "occupancy", "patient_acuity",
+    }
+    assert required.issubset(curated.columns)
+    assert curated["encounter_id"].is_unique
+    assert curated["patient_id"].str.startswith("PAT-SYN-").all()
+    assert audit["duplicate_rows_quarantined"] == 18
+    assert audit["invalid_sequence_rows_quarantined"] == 12
+    assert audit["late_rows_retained_with_flag"] == 28
+
+
+def test_simplified_integration_adapters_map_to_canonical_fields():
+    fhir = map_fhir_encounter({
+        "id": "ENC-1", "status": "in-progress", "subject": {"reference": "Patient/PAT-1"},
+        "period": {"start": "2026-08-19T08:00:00"},
+        "location": [{"location": {"display": "North-1"}}],
+    })
+    adt = map_adt_like("EVENT=A03|PID=PAT-2|ENC=ENC-2|UNIT=South-1|TIME=2026-08-19T09:00:00")
+    assert fhir["encounter_id"] == "ENC-1" and fhir["bed_status"] == "occupied"
+    assert adt["encounter_id"] == "ENC-2" and adt["bed_status"] == "available"
+
+
+def test_sql_examples_execute_and_return_expected_outputs():
+    curated, _ = build_curated_encounters(generate_events())
+    outputs = sql_examples(curated)
+    assert len(outputs) == 4
+    assert all(not item["result"].empty for item in outputs)
+    assert set(outputs[1]["result"]["unit"]) == {"North-1", "North-2", "South-1", "South-2", "East-1", "West-1"}
+
+
+def test_forecast_has_history_and_requested_horizon():
+    forecast = census_forecast(generate_events(), horizon=7)
+    assert (forecast["series"] == "Historical actual").sum() == 28
+    assert (forecast["series"] == "Baseline forecast").sum() == 7
+    assert forecast["census"].between(0, 240).all()
+
+
+def test_regression_and_hypothesis_outputs_are_explainable_and_deterministic():
+    curated, _ = build_curated_encounters(generate_events())
+    coefficients, metadata = regression_summary(curated)
+    first_test = boarding_hypothesis_test(curated)
+    second_test = boarding_hypothesis_test(curated)
+    assert len(coefficients) == 3
+    assert metadata["sample_size"] == 216
+    assert 0 <= metadata["r_squared"] <= 1
+    assert first_test == second_test
+    assert 0 <= first_test["p_value"] <= 1
+
+
+def test_capacity_what_if_is_deterministic_and_improvement_reduces_pressure():
+    baseline = capacity_what_if(generate_events(), projected_admissions=35, expected_discharges=20, discharge_timing_improvement=0)
+    improved = capacity_what_if(generate_events(), projected_admissions=35, expected_discharges=20, discharge_timing_improvement=30)
+    assert improved["scenario_occupied"] < baseline["scenario_occupied"]
+    assert improved["scenario_pressure"] <= baseline["scenario_pressure"]

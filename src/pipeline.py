@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import sqlite3
+
+import numpy as np
 import pandas as pd
 
 from .generate_synthetic_data import AS_OF, UNIT_CAPACITY, UNITS
@@ -131,3 +134,235 @@ def build_actions(events: pd.DataFrame) -> pd.DataFrame:
             f"{count} occupied encounters meet scenario readiness rule", "Nursing Unit", "Confirm plan and escalate unresolved barrier", 3,
             "Ready cohort disposition confirmed")
     return pd.DataFrame(actions).sort_values(["Escalation deadline", "Severity"]).reset_index(drop=True)
+
+
+def build_curated_encounters(events: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """Validate, transform, and curate event rows into one analytic encounter row.
+
+    Duplicate, invalid-sequence, and unmapped rows are quarantined. Late-arriving
+    discharge records are retained with an explicit audit flag because their
+    clinical event time remains useful after arrival.
+    """
+    checked = validate_events(events)
+    accepted = checked[
+        ~checked["is_duplicate"]
+        & ~checked["is_timestamp_violation"]
+        & ~checked["is_unmapped_unit"]
+    ].copy()
+    accepted = accepted.sort_values(["encounter_id", "event_timestamp", "event_id"])
+
+    current = _latest_encounters(events)
+    current = current[current["unit"].isin(UNITS)]
+    occupied_by_unit = current.groupby("unit")["reconciled_occupied"].sum().to_dict()
+    recent_admissions = accepted[
+        accepted["event_type"].eq("admission")
+        & accepted["event_timestamp"].ge(AS_OF - pd.Timedelta(hours=24))
+    ].groupby("unit")["encounter_id"].nunique().to_dict()
+
+    rows: list[dict] = []
+    for encounter_id, group in accepted.groupby("encounter_id", sort=True):
+        admissions = group[group["event_type"].eq("admission")]
+        if admissions.empty:
+            continue
+        admission_time = admissions["event_timestamp"].min()
+        transfers = group[group["event_type"].eq("transfer")]
+        discharges = group[group["event_type"].eq("discharge")]
+        latest = group.iloc[-1]
+        unit = str(latest["unit"])
+        number = int(encounter_id.split("-")[-1])
+        decision_time = admission_time + pd.Timedelta(minutes=25 + number % 31)
+        request_time = decision_time + pd.Timedelta(minutes=10 + number % 16)
+        transfer_time = transfers["event_timestamp"].min() if not transfers.empty else pd.NaT
+        board_hours = float(latest["ed_boarding_duration_hours"])
+        assigned_time = request_time + pd.Timedelta(hours=board_hours)
+        actual_discharge = discharges["event_timestamp"].max() if not discharges.empty else pd.NaT
+        acuity = ["low", "moderate", "high"][number % 3]
+        rows.append({
+            "patient_id": f"PAT-SYN-{number:05d}",
+            "encounter_id": encounter_id,
+            "unit": unit,
+            "admission_time": admission_time,
+            "decision_to_admit_time": decision_time,
+            "bed_request_time": request_time,
+            "bed_assigned_time": assigned_time,
+            "transfer_time": transfer_time,
+            "expected_discharge_time": admission_time + pd.Timedelta(hours=48 + number % 25),
+            "actual_discharge_time": actual_discharge,
+            "bed_status": "occupied" if bool(latest["physical_bed_status"] == "occupied") else "available",
+            "staffed_beds": UNIT_CAPACITY,
+            "occupancy": float(occupied_by_unit.get(unit, 0) / UNIT_CAPACITY),
+            "patient_acuity": acuity,
+            "boarding_hours": board_hours,
+            "admission_volume_24h": int(recent_admissions.get(unit, 0)),
+            "discharge_before_noon": bool(pd.notna(actual_discharge) and actual_discharge.hour < 12),
+            "decision_to_bed_minutes": float((assigned_time - decision_time).total_seconds() / 60),
+            "late_arriving_record": bool(group["is_late_discharge"].any()),
+            "missing_acknowledgement": bool(group["is_missing_ack"].any()),
+            "source_record_count": int(len(group)),
+        })
+    curated = pd.DataFrame(rows).sort_values("encounter_id").reset_index(drop=True)
+    audit = {
+        "raw_rows": int(len(events)),
+        "validated_rows": int(len(checked)),
+        "duplicate_rows_quarantined": int(checked["is_duplicate"].sum()),
+        "invalid_sequence_rows_quarantined": int(checked["is_timestamp_violation"].sum()),
+        "unmapped_rows_quarantined": int(checked["is_unmapped_unit"].sum()),
+        "accepted_event_rows": int(len(accepted)),
+        "curated_encounters": int(len(curated)),
+        "late_rows_retained_with_flag": int(checked["is_late_discharge"].sum()),
+        "missing_ack_rows_flagged": int(checked["is_missing_ack"].sum()),
+    }
+    return curated, audit
+
+
+def map_fhir_encounter(payload: dict) -> dict:
+    """Map a tiny synthetic FHIR-style Encounter payload to the canonical schema."""
+    period = payload.get("period", {})
+    location = (payload.get("location") or [{}])[0].get("location", {})
+    return {
+        "patient_id": payload.get("subject", {}).get("reference", "").replace("Patient/", ""),
+        "encounter_id": payload.get("id"),
+        "unit": location.get("display"),
+        "admission_time": period.get("start"),
+        "actual_discharge_time": period.get("end"),
+        "bed_status": "available" if payload.get("status") == "finished" else "occupied",
+        "source_format": "FHIR-style REST/JSON",
+    }
+
+
+def map_adt_like(message: str) -> dict:
+    """Map a deliberately simplified pipe-delimited ADT-like event."""
+    fields = dict(part.split("=", 1) for part in message.split("|") if "=" in part)
+    return {
+        "patient_id": fields.get("PID"),
+        "encounter_id": fields.get("ENC"),
+        "unit": fields.get("UNIT"),
+        "admission_time": fields.get("TIME"),
+        "bed_status": "occupied" if fields.get("EVENT") in {"A01", "A02"} else "available",
+        "source_format": "ADT-like",
+    }
+
+
+def sql_examples(curated: pd.DataFrame) -> list[dict]:
+    """Run four visible, read-only SQLite examples over the curated table."""
+    sql_ready = curated.copy()
+    for column in sql_ready.select_dtypes(include=["datetime64[ns]"]).columns:
+        sql_ready[column] = sql_ready[column].astype("string")
+    queries = [
+        ("Average decision-to-bed minutes by unit", """
+            SELECT unit, ROUND(AVG(decision_to_bed_minutes), 1) AS avg_minutes
+            FROM encounters GROUP BY unit ORDER BY avg_minutes DESC
+        """),
+        ("Current occupancy by unit", """
+            SELECT unit, staffed_beds,
+                   SUM(CASE WHEN bed_status = 'occupied' THEN 1 ELSE 0 END) AS occupied,
+                   ROUND(100.0 * SUM(CASE WHEN bed_status = 'occupied' THEN 1 ELSE 0 END) / staffed_beds, 1) AS occupancy_pct
+            FROM encounters GROUP BY unit, staffed_beds ORDER BY occupancy_pct DESC
+        """),
+        ("Discharge-before-noon percentage", """
+            SELECT unit, COUNT(*) AS completed_discharges,
+                   ROUND(100.0 * AVG(CASE WHEN discharge_before_noon = 1 THEN 1.0 ELSE 0.0 END), 1) AS before_noon_pct
+            FROM encounters WHERE actual_discharge_time IS NOT NULL
+            GROUP BY unit ORDER BY before_noon_pct DESC
+        """),
+        ("Current boarding over four hours", """
+            SELECT unit, COUNT(*) AS boarders_over_4h
+            FROM encounters WHERE bed_status = 'occupied' AND boarding_hours > 4
+            GROUP BY unit ORDER BY boarders_over_4h DESC
+        """),
+    ]
+    results: list[dict] = []
+    with sqlite3.connect(":memory:") as connection:
+        sql_ready.to_sql("encounters", connection, index=False)
+        for title, query in queries:
+            results.append({"title": title, "query": query.strip(), "result": pd.read_sql_query(query, connection)})
+    return results
+
+
+def census_forecast(events: pd.DataFrame, horizon: int = 7, alpha: float = 0.35, beta: float = 0.15) -> pd.DataFrame:
+    """Create synthetic history and a transparent Holt level/trend forecast."""
+    _, metrics = reconcile(events)
+    dates = pd.date_range(AS_OF.normalize() - pd.Timedelta(days=27), periods=28, freq="D")
+    index = np.arange(28)
+    actual = metrics["reconciled_occupied"] - 7 + 0.35 * index + 5 * np.sin(2 * np.pi * index / 7)
+    actual = np.clip(np.rint(actual), 0, metrics["bed_capacity"]).astype(int)
+    level = float(actual[0])
+    trend = float(actual[1] - actual[0])
+    fitted = [level]
+    for value in actual[1:]:
+        previous_level = level
+        level = alpha * float(value) + (1 - alpha) * (level + trend)
+        trend = beta * (level - previous_level) + (1 - beta) * trend
+        fitted.append(level + trend)
+    rows = [{"date": date, "series": "Historical actual", "census": int(value)} for date, value in zip(dates, actual)]
+    rows.extend({"date": dates[-1] + pd.Timedelta(days=step), "series": "Baseline forecast",
+                 "census": round(float(np.clip(level + step * trend, 0, metrics["bed_capacity"])), 1)}
+                for step in range(1, horizon + 1))
+    return pd.DataFrame(rows)
+
+
+def regression_summary(curated: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """Fit a small OLS illustration for current boarding time; not causal."""
+    sample = curated[curated["bed_status"].eq("occupied")].copy()
+    sample["acuity_score"] = sample["patient_acuity"].map({"low": 1, "moderate": 2, "high": 3})
+    predictors = ["occupancy", "admission_volume_24h", "acuity_score"]
+    raw_x = sample[predictors].astype(float).to_numpy()
+    means = raw_x.mean(axis=0)
+    scales = raw_x.std(axis=0)
+    scales[scales == 0] = 1
+    standardized = (raw_x - means) / scales
+    design = np.column_stack([np.ones(len(sample)), standardized])
+    y = sample["boarding_hours"].astype(float).to_numpy()
+    coefficients, *_ = np.linalg.lstsq(design, y, rcond=None)
+    predicted = design @ coefficients
+    denominator = float(np.sum((y - y.mean()) ** 2))
+    r_squared = 1 - float(np.sum((y - predicted) ** 2)) / denominator if denominator else 0.0
+    table = pd.DataFrame({
+        "Predictor (one standard-deviation increase)": ["Unit occupancy", "Recent admission volume", "Patient acuity"],
+        "Estimated boarding-hour change": np.round(coefficients[1:], 2),
+    })
+    return table, {"sample_size": int(len(sample)), "intercept_hours": round(float(coefficients[0]), 2),
+                   "r_squared": round(r_squared, 3)}
+
+
+def boarding_hypothesis_test(curated: pd.DataFrame, permutations: int = 2000) -> dict:
+    """Deterministic two-sided permutation test for high versus lower occupancy."""
+    sample = curated[curated["bed_status"].eq("occupied")].copy()
+    threshold = float(sample["occupancy"].median())
+    high = sample.loc[sample["occupancy"].gt(threshold), "boarding_hours"].to_numpy(float)
+    lower = sample.loc[sample["occupancy"].le(threshold), "boarding_hours"].to_numpy(float)
+    observed = float(high.mean() - lower.mean())
+    combined = np.concatenate([high, lower])
+    rng = np.random.default_rng(20260819)
+    extreme = 0
+    for _ in range(permutations):
+        shuffled = rng.permutation(combined)
+        difference = float(shuffled[:len(high)].mean() - shuffled[len(high):].mean())
+        extreme += abs(difference) >= abs(observed)
+    return {
+        "threshold_pct": round(threshold * 100, 1),
+        "high_mean": round(float(high.mean()), 2),
+        "lower_mean": round(float(lower.mean()), 2),
+        "test_statistic": round(observed, 2),
+        "p_value": round((extreme + 1) / (permutations + 1), 4),
+        "high_n": int(len(high)),
+        "lower_n": int(len(lower)),
+    }
+
+
+def capacity_what_if(events: pd.DataFrame, projected_admissions: int, expected_discharges: int,
+                     discharge_timing_improvement: int = 0) -> dict:
+    """Deterministic one-horizon capacity arithmetic for an operational discussion."""
+    _, metrics = reconcile(events)
+    accelerated = min(metrics["discharge_ready"], int(round(expected_discharges * discharge_timing_improvement / 100)))
+    baseline = metrics["reconciled_occupied"] + projected_admissions - expected_discharges
+    scenario = baseline - accelerated
+    return {
+        "staffed_beds": metrics["bed_capacity"],
+        "starting_occupied": metrics["reconciled_occupied"],
+        "baseline_occupied": max(0, baseline),
+        "scenario_occupied": max(0, scenario),
+        "accelerated_discharges": accelerated,
+        "baseline_pressure": max(0, baseline - metrics["bed_capacity"]),
+        "scenario_pressure": max(0, scenario - metrics["bed_capacity"]),
+    }

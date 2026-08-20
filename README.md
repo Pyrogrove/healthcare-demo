@@ -9,13 +9,16 @@ It is not a GE HealthCare product, Command Center replica, clinical tool, hospit
 - 5,000 deterministic synthetic ADT-like events generated in memory
 - a plausible 240-bed inventory with controlled integration defects
 - executive-level problem framing and a prominent Reported-vs-Reconciled decision
-- unit pressure analysis and bottleneck decomposition
-- transparent near-term planning arithmetic, explicitly not a trained forecast
-- a tiered Daily Operating System with evidence, accountable owners, deadlines, and success measures
+- raw → validation → transformation → curated encounter ETL with visible defect handling
+- simplified synthetic ADT-like and FHIR-style REST/JSON mappings
+- four visible SQLite queries over the curated analytic table
+- unit pressure and bottleneck analysis
+- a transparent Holt census baseline, small OLS association example, and exploratory permutation test
+- deterministic what-if capacity arithmetic and an action queue with owners and deadlines
 
 ## Architecture and setup
 
-Python + Streamlit UI, pandas pipeline, Plotly charts, and pytest tests. No database, external API, machine learning, authentication, or cloud configuration.
+Python + Streamlit UI, pandas/NumPy pipeline, Plotly charts, standard-library SQLite, and pytest tests. SQLite is in-memory for demonstration; there is no external API, persistent database, authentication, or production integration.
 
 ```powershell
 python -m pip install -r requirements.txt
@@ -26,20 +29,22 @@ Stop with `Ctrl+C`; restart with the same Streamlit command. The app defaults to
 
 ## Deployment status
 
-The canonical source repository is [Pyrogrove/healthcare-demo](https://github.com/Pyrogrove/healthcare-demo). The verified public demonstration is hosted on [Streamlit Community Cloud](https://pyrogrove-healthcare-demo.streamlit.app/), using `main` and `app.py` with dependencies from the root `requirements.txt`.
+The canonical source repository is [Pyrogrove/healthcare-demo](https://github.com/Pyrogrove/healthcare-demo). The public [Streamlit Community Cloud demonstration](https://pyrogrove-healthcare-demo.streamlit.app/) currently reflects the previous retained milestone. The technical interview enhancements documented here remain local until Chee explicitly approves a commit, push, and deployment.
 
 The local `GE material/` directory contains interview research artifacts and is explicitly excluded from version control and publication.
 
-## Two-minute interview path
+## Five-minute interview path
 
-1. **Executive Brief:** state the conclusion first—97.5% reported occupancy becomes 90.0% after removing 18 phantom states, but 92 long-wait boarders prove real congestion remains.
-2. **Flow Diagnosis:** show which units carry pressure, decompose the bottlenecks, then test the owned-action scenario without claiming a forecast.
-3. **Daily Operating System:** move from a unit round to service queues, tiered huddle, central escalation, and outcome measurement.
-4. **Evidence & Method:** trace every conclusion back through validation and reconciliation rules; close on assumptions and what the prototype does not prove.
+1. **Current State:** lead with 234 reported occupied beds versus 216 reconciled, then distinguish data distortion from persistent boarding.
+2. **Data & ETL:** show raw → validate → transform → curate, one defect-handling example, one simplified integration mapping, and one SQL query.
+3. **Forecast & Statistics:** explain the transparent seven-day baseline, low-powered exploratory regression, and what the permutation-test p-value does not prove.
+4. **What-if & Action:** change one assumption, interpret the result as deterministic arithmetic, and close on owner, deadline, success measure, and human decision.
+
+See `INTERVIEW_DEMO_GUIDE.md` for exact wording, likely questions, and production limitations.
 
 ## Verification
 
-On 2026-08-19, 11 tests passed, Python compilation completed, installed-package consistency passed, the exact Streamlit command started the application, and both local and deployed browser workflows were checked across all four tabs with no console errors. No lint or static type-check configuration exists, so those checks are unverified rather than claimed. See `PROJECT.md` for retained evidence.
+On 2026-08-20, 17 tests passed, Python compilation completed, installed-package consistency passed, the exact Streamlit command started the application, and Streamlit's app test runner rendered all six tabs and interactive controls with no application exception. Direct browser rendering of this local working copy is unverified because the browser-control connection was unavailable. No lint or static type-check configuration exists. The deployed site remains the previously verified retained build. See `PROJECT.md` for the state boundary.
 
 ## Data and privacy boundary
 
