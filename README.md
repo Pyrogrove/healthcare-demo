@@ -29,7 +29,7 @@ Stop with `Ctrl+C`; restart with the same Streamlit command. The app defaults to
 
 ## Deployment status
 
-The canonical source repository is [Pyrogrove/healthcare-demo](https://github.com/Pyrogrove/healthcare-demo). The public [Streamlit Community Cloud demonstration](https://pyrogrove-healthcare-demo.streamlit.app/) currently reflects the previous retained milestone. The technical interview enhancements documented here remain local until Chee explicitly approves a commit, push, and deployment.
+The canonical source repository is [Pyrogrove/healthcare-demo](https://github.com/Pyrogrove/healthcare-demo). The enhanced milestone is committed on `main` and connected to the public [Streamlit Community Cloud demonstration](https://pyrogrove-healthcare-demo.streamlit.app/). After the push, the public endpoint returned HTTP 200; browser-level confirmation that all six enhanced sections are rendered remains unverified.
 
 The local `GE material/` directory contains interview research artifacts and is explicitly excluded from version control and publication.
 
@@ -44,7 +44,7 @@ See `INTERVIEW_DEMO_GUIDE.md` for exact wording, likely questions, and productio
 
 ## Verification
 
-On 2026-08-20, 17 tests passed, Python compilation completed, installed-package consistency passed, the exact Streamlit command started the application, and Streamlit's app test runner rendered all six tabs and interactive controls with no application exception. Direct browser rendering of this local working copy is unverified because the browser-control connection was unavailable. No lint or static type-check configuration exists. The deployed site remains the previously verified retained build. See `PROJECT.md` for the state boundary.
+On 2026-08-20, 17 tests passed, Python compilation completed, installed-package consistency passed, the exact Streamlit command started the application, and Streamlit's app test runner rendered all six tabs and interactive controls with no application exception. The intended change set passed credential, ignored-file, generated-junk, size, and diff checks before commit. GitHub `main` and the public Streamlit endpoint were reachable after push. Direct browser confirmation of the deployed six-section interface remains unverified because the browser-control connection was unavailable. No lint or static type-check configuration exists. See `PROJECT.md` for the state boundary.
 
 ## Data and privacy boundary
 
